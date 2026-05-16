@@ -1,94 +1,58 @@
 import discord
 from discord.ext import commands
 import random
-
-TOKEN = "TON_TOKEN_ICI"
+import os
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.voice_states = True
-intents.members = True
 
-bot = commands.Bot(command_prefix="+", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 giveaways = {}
 
 @bot.event
 async def on_ready():
-    print(f"Connecté : {bot.user}")
+    print(f"Bot connecté : {bot.user}")
 
-# CREATE GIVEAWAY
 @bot.command()
-async def gcreate(ctx, *, prize):
+async def ping(ctx):
+    await ctx.send("Pong 🏓")
 
+@bot.command()
+async def giveaway(ctx, duration: int, *, prize):
     embed = discord.Embed(
         title="🎉 GIVEAWAY 🎉",
-        description=f"Réagis avec 🎉 pour participer\n\n🏆 {prize}",
-        color=0x00ff00
+        description=f"Réagis avec 🎉 pour participer !\n\n🏆 Prix : **{prize}**\n⏳ Durée : **{duration} secondes**",
+        color=0xff0000
     )
 
-    msg = await ctx.send(embed=embed)
+    message = await ctx.send(embed=embed)
+    await message.add_reaction("🎉")
 
-    await msg.add_reaction("🎉")
+    giveaways[message.id] = {
+        "prize": prize,
+        "channel": ctx.channel.id
+    }
 
-    giveaways[msg.id] = prize
+    await ctx.send(f"Giveaway lancé pour **{prize}**")
 
-    await ctx.send(f"✅ Giveaway créé\nID: {msg.id}")
+    await discord.utils.sleep_until(
+        discord.utils.utcnow() + discord.timedelta(seconds=duration)
+    )
 
-# END GIVEAWAY
-@bot.command()
-async def gend(ctx, message_id: int):
+    new_message = await ctx.channel.fetch_message(message.id)
 
-    try:
-        msg = await ctx.channel.fetch_message(message_id)
+    users = []
+    for reaction in new_message.reactions:
+        if str(reaction.emoji) == "🎉":
+            async for user in reaction.users():
+                if not user.bot:
+                    users.append(user)
 
-        reaction = discord.utils.get(msg.reactions, emoji="🎉")
-
-        users = [user async for user in reaction.users()]
-
-        users.remove(bot.user)
-
-        if len(users) == 0:
-            await ctx.send("❌ Aucun participant")
-            return
-
+    if len(users) == 0:
+        await ctx.send("Personne n'a participé 😢")
+    else:
         winner = random.choice(users)
+        await ctx.send(f"🎉 Félicitations {winner.mention} ! Tu as gagné **{prize}**")
 
-        await ctx.send(f"🏆 Gagnant : {winner.mention}")
-
-    except:
-        await ctx.send("❌ Giveaway introuvable")
-
-# SET WINNER
-@bot.command()
-async def gwinner(ctx, member: discord.Member):
-
-    await ctx.send(f"🏆 Nouveau gagnant : {member.mention}")
-
-# FIND USER
-@bot.command()
-async def find(ctx, member: discord.Member):
-
-    voice = member.voice
-
-    if voice is None:
-        await ctx.send("❌ Pas en vocal")
-        return
-
-    await ctx.send(
-        f"""
-🎤 Salon : {voice.channel.name}
-
-🔇 Mute : {voice.mute}
-
-🎧 Deaf : {voice.deaf}
-"""
-    )
-
-# RENEW
-@bot.command()
-async def renew(ctx):
-
-    await ctx.send("♻️ Giveaway renouvelé")
-
-bot.run(TOKEN)
+bot.run(os.getenv("TOKEN"))

@@ -1,14 +1,32 @@
 import discord
 from discord.ext import commands
+from flask import Flask
+from threading import Thread
 import random
 import os
+import asyncio
+
+# ----- Serveur web pour Render -----
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot online"
+
+def run():
+    app.run(host='0.0.0.0', port=10000)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# ----- Bot Discord -----
 
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-giveaways = {}
 
 @bot.event
 async def on_ready():
@@ -29,20 +47,14 @@ async def giveaway(ctx, duration: int, *, prize):
     message = await ctx.send(embed=embed)
     await message.add_reaction("🎉")
 
-    giveaways[message.id] = {
-        "prize": prize,
-        "channel": ctx.channel.id
-    }
-
     await ctx.send(f"Giveaway lancé pour **{prize}**")
 
-    await discord.utils.sleep_until(
-        discord.utils.utcnow() + discord.timedelta(seconds=duration)
-    )
+    await asyncio.sleep(duration)
 
     new_message = await ctx.channel.fetch_message(message.id)
 
     users = []
+
     for reaction in new_message.reactions:
         if str(reaction.emoji) == "🎉":
             async for user in reaction.users():
@@ -53,6 +65,8 @@ async def giveaway(ctx, duration: int, *, prize):
         await ctx.send("Personne n'a participé 😢")
     else:
         winner = random.choice(users)
-        await ctx.send(f"🎉 Félicitations {winner.mention} ! Tu as gagné **{prize}**")
+        await ctx.send(f"🎉 {winner.mention} a gagné **{prize}** !")
+
+keep_alive()
 
 bot.run(os.getenv("TOKEN"))
